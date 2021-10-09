@@ -10,7 +10,7 @@ echo "This scaffolding refresh has been tested on macOS, if you use it on linux,
 # Copy the important files out temporarily
 if [ -d TEMP ]; then
   echo "TEMP directory already exists - we use that to store files while refreshing."
-  exit 1
+  # exit 1
 else
   echo "Saving files to TEMP while refreshing scaffolding..."
   mkdir -p TEMP/android
@@ -40,6 +40,11 @@ fi
 npx react-native init example
 pushd example
 npx react-native-windows-init --overwrite
+
+# Just for now - while react-native-windows is on 0.66.0-preview.6 it pins react-native to 0.66.0-rc.1
+# That's not great though, we want the official release
+yarn add react-native@0.66.0
+
 yarn add github:react-native-community/react-native-device-info
 
 # Windows CI requires versions just a bit behind current in order to work #1155
@@ -49,27 +54,28 @@ yarn add \
   selenium-webdriver@4.0.0-alpha.7 --dev
 
 
-# react-native 0.60 is cocoapods mainly now, so run pod install after installing react-native-device-info
-cd ios && pod install && cd ..
-
 # Add our app extension back to the template Podfile
 sed -i -e $'s/^  target \'exampleTests\' do/  target \'example-app-extension\' do\\\n    inherit! :complete\\\n  end\\\n\\\n  target \'exampleTests\' do/' ios/Podfile
 rm -f ios/Podfile??
 
+# FIXME We need to fix a compile problem with "sharedApplication" usage in iOS extensions
+    # Fix sharedApplication' is unavailable: not available on iOS (App Extension) - Use view controller based solutions where appropriate instead
+    # https://stackoverflow.com/questions/52503400/sharedapplication-is-unavailable-not-available-on-ios-app-extension-use-v
+#    installer.pods_project.targets.each do |target|
+#      target.build_configurations.each do |config|
+#        config.build_settings['APPLICATION_EXTENSION_API_ONLY'] = 'NO'
+#      end
+#    end
+
+# react-native 0.60 is cocoapods mainly now, so run pod install after installing react-native-device-info
+cd ios && rm -f Podfile.lock && pod install && cd ..
+
 # Patch the build.gradle directly to slice in our android play version
-# react-native 0.60 is AndroidX! Set up a bunch of AndroidX version
 sed -i -e 's/ext {$/ext {        firebaseIidVersion = "19.0.1"/' android/build.gradle
-sed -i -e 's/ext {$/ext {        minSdkVersion = 16/' android/build.gradle
-sed -i -e 's/ext {$/ext {        supportLibVersion = "1.0.2"/' android/build.gradle
-sed -i -e 's/ext {$/ext {        mediaCompatVersion = "1.0.1"/' android/build.gradle
+sed -i -e 's/ext {$/ext {        supportLibVersion = "1.6.0/' android/build.gradle
+sed -i -e 's/ext {$/ext {        mediaCompatVersion = "1.4.2"/' android/build.gradle
 sed -i -e 's/ext {$/ext {        supportV4Version = "1.0.1"/' android/build.gradle
 rm -f android/build.gradle??
-
-# Patch the app/build.gradle to enable the JS bundle in debug - this is important
-# For testing because iOS9 and Android API<18 can't do port-forwarding so they can't
-# see a local dev bundle server, they have to have the bundle packaged and in the app
-sed -i -e $'s/^project.ext.react = \[/project.ext.react = \[\\\n    bundleInDebug: true,/' android/app/build.gradle
-rm -f android/app/build.gradle??
 
 # Patch the AndroidManifest directly to add our permissions
 sed -i -e 's/INTERNET" \/>/INTERNET" \/><uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" \/><uses-permission android:name="android.permission.ACCESS_WIFI_STATE" \/><uses-permission android:name="android.permission.READ_PHONE_STATE" \/>/' android/app/src/main/AndroidManifest.xml
